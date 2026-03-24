@@ -23,6 +23,19 @@ export async function handleEmailsApi(request, db, url, path, options) {
   const isMailboxOnly = !!options.mailboxOnly;
   const r2 = options.r2;
 
+  async function deleteR2Objects(objectKeys = []) {
+    if (!r2 || !Array.isArray(objectKeys) || objectKeys.length === 0) return;
+    for (const key of objectKeys) {
+      const objectKey = String(key || '').trim();
+      if (!objectKey) continue;
+      try {
+        await r2.delete(objectKey);
+      } catch (error) {
+        console.warn(`删除 R2 对象失败: ${objectKey}`, error);
+      }
+    }
+  }
+
   // 获取邮件列表
   if (path === '/api/emails' && request.method === 'GET') {
     const mailbox = url.searchParams.get('mailbox');
@@ -133,9 +146,17 @@ export async function handleEmailsApi(request, db, url, path, options) {
       if (!mailboxId) {
         return Response.json({ success: true, deletedCount: 0 });
       }
-      
+
+      const objectRows = await db.prepare(
+        'SELECT r2_object_key FROM messages WHERE mailbox_id = ? AND r2_object_key IS NOT NULL AND r2_object_key != ?'
+      ).bind(mailboxId, '').all();
+
       const result = await db.prepare(`DELETE FROM messages WHERE mailbox_id = ?`).bind(mailboxId).run();
       const deletedCount = result?.meta?.changes || 0;
+
+      if (deletedCount > 0) {
+        await deleteR2Objects((objectRows?.results || []).map(row => row?.r2_object_key));
+      }
       
       return Response.json({
         success: true,
@@ -242,8 +263,17 @@ export async function handleEmailsApi(request, db, url, path, options) {
     }
     
     try {
+      const { results } = await db.prepare(
+        'SELECT r2_object_key FROM messages WHERE id = ? LIMIT 1'
+      ).bind(emailId).all();
+      const objectKey = String(results?.[0]?.r2_object_key || '').trim();
+
       const result = await db.prepare(`DELETE FROM messages WHERE id = ?`).bind(emailId).run();
       const deleted = (result?.meta?.changes || 0) > 0;
+
+      if (deleted && objectKey) {
+        await deleteR2Objects([objectKey]);
+      }
       
       return Response.json({
         success: true,
