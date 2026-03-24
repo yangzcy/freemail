@@ -65,6 +65,9 @@
               <button id="select-page" class="btn btn-ghost btn-sm" title="选择当前页邮箱">
                 <span class="btn-icon">☑️</span><span>全选当前页</span>
               </button>
+              <button id="select-filtered" class="btn btn-ghost btn-sm" title="选择当前筛选结果">
+                <span class="btn-icon">📚</span><span>全选筛选结果</span>
+              </button>
               <button id="clear-selection" class="btn btn-ghost btn-sm" title="清空已选邮箱">
                 <span class="btn-icon">🧹</span><span>清空选择</span>
               </button>
@@ -358,6 +361,25 @@
             <span class="btn-text">确定分配</span>
             <span class="btn-loading" style="display: none;">分配中...</span>
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="confirm-modal" style="display:none">
+    <div class="modal-card confirm-card">
+      <div class="modal-header confirm-header">
+        <div>
+          <span id="confirm-icon" class="modal-icon">⚠️</span>
+          <span id="confirm-title">确认操作</span>
+        </div>
+        <button id="confirm-close" class="close">✕</button>
+      </div>
+      <div class="modal-body confirm-body">
+        <div id="confirm-message" class="confirm-message"></div>
+        <div class="confirm-actions">
+          <button id="confirm-cancel" class="btn btn-secondary">取消</button>
+          <button id="confirm-ok" class="btn btn-danger">确定</button>
         </div>
       </div>
     </div>

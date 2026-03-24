@@ -31,6 +31,7 @@ const els = {
   favoriteFilter: document.getElementById('favorite-filter'),
   forwardFilter: document.getElementById('forward-filter'),
   selectPage: document.getElementById('select-page'),
+  selectFiltered: document.getElementById('select-filtered'),
   clearSelection: document.getElementById('clear-selection'),
   selectedCount: document.getElementById('selected-mailbox-count'),
   // 批量操作按钮
@@ -53,6 +54,14 @@ const els = {
   batchForwardTarget: document.getElementById('batch-forward-target'),
   batchModalCancel: document.getElementById('batch-modal-cancel'),
   batchModalConfirm: document.getElementById('batch-modal-confirm'),
+  // 通用确认弹窗
+  confirmModal: document.getElementById('confirm-modal'),
+  confirmIcon: document.getElementById('confirm-icon'),
+  confirmTitle: document.getElementById('confirm-title'),
+  confirmMessage: document.getElementById('confirm-message'),
+  confirmOk: document.getElementById('confirm-ok'),
+  confirmCancel: document.getElementById('confirm-cancel'),
+  confirmClose: document.getElementById('confirm-close'),
   // 密码操作模态框
   passwordModal: document.getElementById('password-modal'),
   passwordModalClose: document.getElementById('password-modal-close'),
@@ -72,6 +81,90 @@ let currentView = localStorage.getItem('mf:mailboxes:view') || 'grid';
 let searchTimeout = null, isLoading = false;
 let availableDomains = [];
 const selectedAddresses = new Set();
+let dialogResolver = null;
+let dialogMode = 'confirm';
+
+function closeConfirmModal(result = false) {
+  if (els.confirmModal) {
+    els.confirmModal.style.display = 'none';
+  }
+  const resolve = dialogResolver;
+  dialogResolver = null;
+  if (resolve) resolve(result);
+}
+
+function showDialog(message, options = {}) {
+  const {
+    title = '确认操作',
+    icon = '⚠️',
+    confirmText = '确定',
+    cancelText = '取消',
+    danger = true,
+    showCancel = true
+  } = options;
+
+  return new Promise((resolve) => {
+    dialogResolver = resolve;
+    dialogMode = showCancel ? 'confirm' : 'alert';
+
+    if (els.confirmTitle) els.confirmTitle.textContent = title;
+    if (els.confirmIcon) els.confirmIcon.textContent = icon;
+    if (els.confirmMessage) els.confirmMessage.textContent = message;
+    if (els.confirmCancel) {
+      els.confirmCancel.textContent = cancelText;
+      els.confirmCancel.style.display = showCancel ? 'inline-flex' : 'none';
+    }
+    if (els.confirmOk) {
+      els.confirmOk.textContent = confirmText;
+      els.confirmOk.classList.toggle('btn-danger', danger);
+      els.confirmOk.classList.toggle('btn-primary', !danger);
+    }
+    if (els.confirmModal) {
+      els.confirmModal.style.display = 'flex';
+    } else {
+      resolve(window.confirm(message));
+    }
+  });
+}
+
+function showConfirmDialog(message, options = {}) {
+  return showDialog(message, { ...options, showCancel: true });
+}
+
+function showAlertDialog(message, options = {}) {
+  return showDialog(message, { confirmText: '我知道了', danger: false, showCancel: false, ...options });
+}
+
+function getCurrentFilterParams() {
+  const params = {};
+  if (els.q?.value) params.q = els.q.value.trim();
+  if (els.domainFilter?.value) params.domain = els.domainFilter.value;
+  if (els.loginFilter?.value) params.login = els.loginFilter.value;
+  if (els.favoriteFilter?.value) params.favorite = els.favoriteFilter.value;
+  if (els.forwardFilter?.value) params.forward = els.forwardFilter.value;
+  return params;
+}
+
+async function loadAllFilteredAddresses() {
+  const baseParams = getCurrentFilterParams();
+  const size = 500;
+  let currentPage = 1;
+  let total = 0;
+  const addresses = [];
+
+  while (true) {
+    const data = await fetchMailboxes({ ...baseParams, page: currentPage, size });
+    const list = Array.isArray(data) ? data : (data.list || []);
+    total = Number(data?.total ?? list.length);
+    for (const item of list) {
+      if (item?.address) addresses.push(item.address);
+    }
+    if (addresses.length >= total || list.length < size) break;
+    currentPage += 1;
+  }
+
+  return Array.from(new Set(addresses));
+}
 
 function renderCurrentData() {
   if (!els.grid) return;
@@ -90,6 +183,9 @@ function updateSelectionUI() {
   }
   if (els.clearSelection) {
     els.clearSelection.disabled = count === 0;
+  }
+  if (els.selectFiltered) {
+    els.selectFiltered.disabled = lastCount === 0;
   }
 }
 
@@ -123,12 +219,7 @@ async function load() {
   if (els.empty) els.empty.style.display = 'none';
   
   try {
-    const params = { page, size: PAGE_SIZE };
-    if (els.q?.value) params.q = els.q.value.trim();
-    if (els.domainFilter?.value) params.domain = els.domainFilter.value;
-    if (els.loginFilter?.value) params.login = els.loginFilter.value;
-    if (els.favoriteFilter?.value) params.favorite = els.favoriteFilter.value;
-    if (els.forwardFilter?.value) params.forward = els.forwardFilter.value;
+    const params = { page, size: PAGE_SIZE, ...getCurrentFilterParams() };
     
     const data = await fetchMailboxes(params);
     const list = Array.isArray(data) ? data : (data.list || []);
@@ -265,7 +356,10 @@ function bindCardEvents() {
           }
           break;
         case 'delete':
-          if (!confirm(`确定删除邮箱 ${address}？`)) return;
+          if (!await showConfirmDialog(
+            `确定删除邮箱 ${address}？\n删除后该邮箱及其邮件会被硬删除，且不可恢复。`,
+            { title: '删除邮箱', icon: '🗑️' }
+          )) return;
           try {
             await apiDeleteMailbox(address);
             showToast('已删除', 'success');
@@ -506,13 +600,36 @@ async function executeBatchAction() {
 }
 
 async function deleteSelectedMailboxes(event) {
-  const addresses = Array.from(selectedAddresses);
-  if (!addresses.length) {
+  const allSelected = Array.from(selectedAddresses);
+  if (!allSelected.length) {
     showToast('请先勾选邮箱', 'error');
     blurActionButton(event?.currentTarget);
     return;
   }
-  if (!confirm(`确定删除已选中的 ${addresses.length} 个邮箱？所有邮件将被清空。`)) {
+
+  let filteredAddresses = [];
+  try {
+    filteredAddresses = await loadAllFilteredAddresses();
+  } catch (e) {
+    showToast('读取当前筛选结果失败', 'error');
+    blurActionButton(event?.currentTarget);
+    return;
+  }
+
+  const filteredSet = new Set(filteredAddresses);
+  const addresses = allSelected.filter(address => filteredSet.has(address));
+  if (!addresses.length) {
+    showToast('当前筛选结果中没有已选邮箱', 'error');
+    blurActionButton(event?.currentTarget);
+    return;
+  }
+
+  const prompt = `当前筛选结果共 ${filteredAddresses.length} 项，将删除其中已选的 ${addresses.length} 项。删除后邮箱及其邮件会被硬删除，是否继续？`;
+  if (!await showConfirmDialog(prompt, {
+    title: '删除所选邮箱',
+    icon: '🗑️',
+    confirmText: `删除 ${addresses.length} 项`
+  })) {
     blurActionButton(event?.currentTarget);
     return;
   }
@@ -545,6 +662,26 @@ function selectCurrentPageMailboxes(event) {
   blurActionButton(event?.currentTarget);
 }
 
+async function selectFilteredMailboxes(event) {
+  try {
+    const button = event?.currentTarget;
+    if (button) button.disabled = true;
+    const addresses = await loadAllFilteredAddresses();
+    addresses.forEach(address => selectedAddresses.add(address));
+    renderCurrentData();
+    bindCardEvents();
+    updateSelectionUI();
+    showToast(`已选中当前筛选结果 ${addresses.length} 项`, 'success');
+    blurActionButton(button);
+  } catch (e) {
+    showToast('全选筛选结果失败', 'error');
+  } finally {
+    if (els.selectFiltered) {
+      els.selectFiltered.disabled = lastCount === 0;
+    }
+  }
+}
+
 function clearSelectedMailboxes(event) {
   selectedAddresses.clear();
   renderCurrentData();
@@ -570,6 +707,7 @@ els.viewGrid?.addEventListener('click', () => switchView('grid'));
 els.viewList?.addEventListener('click', () => switchView('list'));
 els.logout?.addEventListener('click', async () => { try { await fetch('/api/logout', { method: 'POST' }); } catch(_) {} location.replace('/html/login.html'); });
 els.selectPage?.addEventListener('click', selectCurrentPageMailboxes);
+els.selectFiltered?.addEventListener('click', selectFilteredMailboxes);
 els.clearSelection?.addEventListener('click', clearSelectedMailboxes);
 
 // 批量操作按钮
@@ -588,6 +726,16 @@ els.batchEmailsInput?.addEventListener('input', updateBatchCount);
 els.batchForwardTarget?.addEventListener('input', updateBatchCount);
 els.batchModalConfirm?.addEventListener('click', executeBatchAction);
 els.batchModal?.addEventListener('click', (e) => { if (e.target === els.batchModal) closeBatchModal(); });
+
+// 通用确认弹窗事件
+els.confirmOk?.addEventListener('click', () => closeConfirmModal(true));
+els.confirmCancel?.addEventListener('click', () => closeConfirmModal(false));
+els.confirmClose?.addEventListener('click', () => closeConfirmModal(false));
+els.confirmModal?.addEventListener('click', (e) => {
+  if (e.target === els.confirmModal) {
+    closeConfirmModal(dialogMode === 'alert');
+  }
+});
 
 // 密码操作模态框事件
 els.passwordModalClose?.addEventListener('click', closePasswordModal);

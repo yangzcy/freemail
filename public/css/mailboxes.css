@@ -874,6 +874,40 @@
   border-color: rgba(203, 213, 225, 1) !important;
 }
 
+.confirm-header {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.confirm-body {
+  text-align: center;
+  padding: 28px 24px;
+}
+
+.confirm-message {
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  background: linear-gradient(135deg, rgba(255, 241, 242, 0.92) 0%, rgba(254, 242, 242, 0.86) 100%);
+  color: #334155;
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.confirm-actions .btn {
+  min-width: 108px;
+}
+
 /* 视图切换按钮样式 */
 .view-toggle {
   display: flex;
