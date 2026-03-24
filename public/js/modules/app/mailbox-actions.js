@@ -237,16 +237,16 @@ export async function toggleMailboxPin(event, address, api, showToast, loadMailb
  * @param {Function} showToast - 提示函数
  * @param {Function} showConfirm - 确认函数
  * @param {Function} loadMailboxes - 加载邮箱函数
+ * @param {Function} showAlert - 提示弹窗函数
  */
-export async function deleteMailboxAddress(event, address, elements, api, showToast, showConfirm, loadMailboxes) {
+export async function deleteMailboxAddress(event, address, elements, api, showToast, showConfirm, loadMailboxes, showAlert = null) {
   event.stopPropagation();
-  const confirmed = await showConfirm(`确定删除邮箱 ${address}？所有邮件将被清空。`);
+  const confirmed = await showConfirm(`确定删除邮箱 ${address}？\n删除后该邮箱及其邮件会被硬删除，且不可恢复。`);
   if (!confirmed) return;
   
   try {
     const r = await api(`/api/mailboxes?address=${encodeURIComponent(address)}`, { method: 'DELETE' });
     if (r.ok) {
-      showToast('邮箱已删除', 'success');
       if (getCurrentMailbox() === address) {
         clearCurrentMailbox();
         if (elements.email) elements.email.textContent = '点击生成邮箱';
@@ -256,6 +256,14 @@ export async function deleteMailboxAddress(event, address, elements, api, showTo
         stopAutoRefresh();
       }
       await loadMailboxes({ forceFresh: true });
+      if (showAlert) {
+        await showAlert(
+          `已完成硬删除邮箱 ${address}。\n相关邮件与关联数据也已一并清理。`,
+          { title: '删除完成', icon: '✅', confirmText: '继续使用' }
+        );
+      } else {
+        showToast('邮箱已删除', 'success');
+      }
     }
   } catch(e) {
     showToast(e.message || '删除失败', 'error');

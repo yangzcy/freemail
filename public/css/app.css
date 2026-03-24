@@ -2751,6 +2751,14 @@ select:disabled{
   color: white;
 }
 
+.confirm-card[data-tone="success"] .confirm-header{
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.confirm-card[data-tone="info"] .confirm-header{
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
 .confirm-body{
   text-align: center;
   padding: 32px 24px;
@@ -2765,6 +2773,7 @@ select:disabled{
   background: var(--card-glass);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-glass);
+  white-space: pre-line;
 }
 
 .confirm-actions{

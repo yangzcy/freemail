@@ -9,7 +9,7 @@ import { openForwardDialog, toggleFavorite, injectDialogStyles } from './mailbox
 // 导入模块
 import { formatTs, formatTsMobile, extractCode, escapeHtml, escapeAttr } from './modules/app/ui-helpers.js';
 import { mockApi, MOCK_STATE } from './modules/app/mock-api.js';
-import { showConfirm } from './modules/app/confirm-dialog.js';
+import { showConfirm, showAlert } from './modules/app/confirm-dialog.js';
 import { startAutoRefresh, stopAutoRefresh, initVisibilityTracking } from './modules/app/auto-refresh.js';
 import { getCurrentMailbox, setCurrentMailbox, loadCurrentMailbox, clearCurrentMailbox, setCurrentMailboxInfo, getCurrentMailboxInfo } from './modules/app/mailbox-state.js';
 import { renderPager, sliceByPage, prevPage, nextPage, resetPager, setView, isSentViewActive, renderEmailItem, markViewLoaded, isFirstLoad } from './modules/app/email-list.js';
@@ -127,7 +127,7 @@ function updateMailboxInfoUI(info) { if (!info) return; if (els.favoriteIcon && 
 // 全局函数
 window.selectMailbox = (addr) => selectMailboxAddress(addr, els, api, refresh, autoRefreshCallback, updateMailboxInfoUI);
 window.togglePin = (e, addr) => toggleMailboxPin(e, addr, api, showToast, loadMailboxes);
-window.deleteMailbox = (e, addr) => deleteMailboxAddress(e, addr, els, api, showToast, showConfirm, loadMailboxes);
+window.deleteMailbox = (e, addr) => deleteMailboxAddress(e, addr, els, api, showToast, showConfirm, loadMailboxes, showAlert);
 window.showEmail = (id) => showEmailDetail(id, els, api, showToast);
 window.showSentEmail = async (id) => { try { const r = await api(`/api/sent/${id}`); showSentEmailDetail(await r.json(), els); } catch(e) { showToast(e.message || '加载失败', 'error'); }};
 window.deleteEmail = (id) => deleteEmailById(id, api, showToast, showConfirm, refresh);
