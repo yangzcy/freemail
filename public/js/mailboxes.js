@@ -200,6 +200,20 @@ function blurActionButton(target) {
   }
 }
 
+async function readErrorMessage(response, fallback = '操作失败') {
+  try {
+    const payload = await response.clone().json();
+    return payload?.error || payload?.message || fallback;
+  } catch (_) {
+    try {
+      const text = await response.text();
+      return text || fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+}
+
 function toggleSelectedAddress(address, forceSelected = null) {
   if (!address) return;
   if (forceSelected === true) {
@@ -366,10 +380,16 @@ function bindCardEvents() {
             { title: '删除邮箱', icon: '🗑️' }
           )) return;
           try {
-            await apiDeleteMailbox(address);
-            showToast('已删除', 'success');
-            load();
-          } catch(e) { showToast('删除失败', 'error'); }
+            const response = await apiDeleteMailbox(address);
+            if (!response.ok) {
+              throw new Error(await readErrorMessage(response, '删除失败'));
+            }
+            await load();
+            await showAlertDialog(
+              `已完成硬删除邮箱 ${address}。\n相关邮件与关联数据也已一并清理。`,
+              { title: '删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
+            );
+          } catch(e) { showToast(e.message || '删除失败', 'error'); }
           break;
       }
     };
@@ -590,6 +610,7 @@ async function executeBatchAction() {
     }
     const payload = await result.json().catch(() => ({}));
     const deletedCount = payload.deleted_count ?? emails.length;
+    closeBatchModal();
     if (currentBatchAction === 'delete') {
       await showAlertDialog(
         `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
@@ -598,7 +619,6 @@ async function executeBatchAction() {
     } else {
       showToast('批量操作完成', 'success');
     }
-    closeBatchModal();
     load();
   } catch (e) {
     showToast('操作失败: ' + (e.message || '未知错误'), 'error');

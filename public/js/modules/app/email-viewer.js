@@ -59,16 +59,31 @@ export async function showEmailDetail(id, elements, api, showToast) {
  * @param {Function} showConfirm - 确认函数
  * @param {Function} refresh - 刷新函数
  */
+async function readErrorMessage(response, fallback = '操作失败') {
+  try {
+    const payload = await response.clone().json();
+    return payload?.error || payload?.message || fallback;
+  } catch (_) {
+    try {
+      const text = await response.text();
+      return text || fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+}
+
 export async function deleteEmailById(id, api, showToast, showConfirm, refresh) {
   const confirmed = await showConfirm('确定删除这封邮件？');
   if (!confirmed) return;
   
   try {
     const r = await api(`/api/email/${id}`, { method: 'DELETE' });
-    if (r.ok) {
-      showToast('邮件已删除', 'success');
-      await refresh();
+    if (!r.ok) {
+      throw new Error(await readErrorMessage(r, '删除失败'));
     }
+    showToast('邮件已删除', 'success');
+    await refresh();
   } catch(e) {
     showToast(e.message || '删除失败', 'error');
   }
@@ -88,10 +103,11 @@ export async function deleteSentById(id, api, showToast, showConfirm, refresh) {
   
   try {
     const r = await api(`/api/sent/${id}`, { method: 'DELETE' });
-    if (r.ok) {
-      showToast('记录已删除', 'success');
-      await refresh();
+    if (!r.ok) {
+      throw new Error(await readErrorMessage(r, '删除失败'));
     }
+    showToast('记录已删除', 'success');
+    await refresh();
   } catch(e) {
     showToast(e.message || '删除失败', 'error');
   }

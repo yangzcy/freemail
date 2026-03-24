@@ -11,6 +11,20 @@ import { startAutoRefresh, stopAutoRefresh } from './auto-refresh.js';
 import { resetPager } from './email-list.js';
 import { resetMbPage } from './mailbox-list.js';
 
+async function readErrorMessage(response, fallback = '操作失败') {
+  try {
+    const payload = await response.clone().json();
+    return payload?.error || payload?.message || fallback;
+  } catch (_) {
+    try {
+      const text = await response.text();
+      return text || fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+}
+
 /**
  * 生成随机邮箱
  * @param {object} elements - DOM 元素
@@ -246,24 +260,25 @@ export async function deleteMailboxAddress(event, address, elements, api, showTo
   
   try {
     const r = await api(`/api/mailboxes?address=${encodeURIComponent(address)}`, { method: 'DELETE' });
-    if (r.ok) {
-      if (getCurrentMailbox() === address) {
-        clearCurrentMailbox();
-        if (elements.email) elements.email.textContent = '点击生成邮箱';
-        elements.email?.classList.remove('has-email');
-        if (elements.emailActions) elements.emailActions.style.display = 'none';
-        if (elements.list) elements.list.innerHTML = '';
-        stopAutoRefresh();
-      }
-      await loadMailboxes({ forceFresh: true });
-      if (showAlert) {
-        await showAlert(
-          `已完成硬删除邮箱 ${address}。\n相关邮件与关联数据也已一并清理。`,
-          { title: '删除完成', icon: '✅', confirmText: '继续使用' }
-        );
-      } else {
-        showToast('邮箱已删除', 'success');
-      }
+    if (!r.ok) {
+      throw new Error(await readErrorMessage(r, '删除失败'));
+    }
+    if (getCurrentMailbox() === address) {
+      clearCurrentMailbox();
+      if (elements.email) elements.email.textContent = '点击生成邮箱';
+      elements.email?.classList.remove('has-email');
+      if (elements.emailActions) elements.emailActions.style.display = 'none';
+      if (elements.list) elements.list.innerHTML = '';
+      stopAutoRefresh();
+    }
+    await loadMailboxes({ forceFresh: true });
+    if (showAlert) {
+      await showAlert(
+        `已完成硬删除邮箱 ${address}。\n相关邮件与关联数据也已一并清理。`,
+        { title: '删除完成', icon: '✅', confirmText: '继续使用' }
+      );
+    } else {
+      showToast('邮箱已删除', 'success');
     }
   } catch(e) {
     showToast(e.message || '删除失败', 'error');
@@ -306,10 +321,11 @@ export async function clearAllEmails(api, showToast, showConfirm, refresh) {
   
   try {
     const r = await api(`/api/emails?mailbox=${encodeURIComponent(mailbox)}`, { method: 'DELETE' });
-    if (r.ok) {
-      showToast('邮件已清空', 'success');
-      await refresh();
+    if (!r.ok) {
+      throw new Error(await readErrorMessage(r, '清空失败'));
     }
+    showToast('邮件已清空', 'success');
+    await refresh();
   } catch(e) {
     showToast(e.message || '清空失败', 'error');
   }
