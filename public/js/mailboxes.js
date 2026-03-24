@@ -100,7 +100,8 @@ function showDialog(message, options = {}) {
     confirmText = '确定',
     cancelText = '取消',
     danger = true,
-    showCancel = true
+    showCancel = true,
+    tone = danger ? 'danger' : 'info'
   } = options;
 
   return new Promise((resolve) => {
@@ -120,6 +121,10 @@ function showDialog(message, options = {}) {
       els.confirmOk.classList.toggle('btn-primary', !danger);
     }
     if (els.confirmModal) {
+      const card = els.confirmModal.querySelector('.confirm-card');
+      if (card) {
+        card.dataset.tone = tone;
+      }
       els.confirmModal.style.display = 'flex';
     } else {
       resolve(window.confirm(message));
@@ -132,7 +137,7 @@ function showConfirmDialog(message, options = {}) {
 }
 
 function showAlertDialog(message, options = {}) {
-  return showDialog(message, { confirmText: '我知道了', danger: false, showCancel: false, ...options });
+  return showDialog(message, { confirmText: '我知道了', danger: false, showCancel: false, tone: 'info', ...options });
 }
 
 function getCurrentFilterParams() {
@@ -584,10 +589,15 @@ async function executeBatchAction() {
       throw new Error(err.error || '批量操作失败');
     }
     const payload = await result.json().catch(() => ({}));
-    const summary = currentBatchAction === 'delete'
-      ? `批量删除完成，成功 ${payload.deleted_count ?? emails.length} 个`
-      : '批量操作完成';
-    showToast(summary, 'success');
+    const deletedCount = payload.deleted_count ?? emails.length;
+    if (currentBatchAction === 'delete') {
+      await showAlertDialog(
+        `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
+        { title: '批量删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
+      );
+    } else {
+      showToast('批量操作完成', 'success');
+    }
     closeBatchModal();
     load();
   } catch (e) {
@@ -645,8 +655,15 @@ async function deleteSelectedMailboxes(event) {
       selectedAddresses.delete(address);
     }
     updateSelectionUI();
-    showToast(`已删除 ${payload.deleted_count ?? addresses.length} 个邮箱`, 'success');
+    const deletedCount = payload.deleted_count ?? addresses.length;
+    const skippedCount = Math.max(allSelected.length - addresses.length, 0);
     await load();
+    await showAlertDialog(
+      skippedCount > 0
+        ? `已完成硬删除 ${deletedCount} 个邮箱。\n本次仅处理当前筛选结果中的已选项，另有 ${skippedCount} 个已选邮箱不在当前筛选范围内，未被删除。`
+        : `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
+      { title: '删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
+    );
   } catch (e) {
     showToast('删除失败: ' + (e.message || '未知错误'), 'error');
   } finally {

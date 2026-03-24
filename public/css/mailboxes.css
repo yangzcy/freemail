@@ -879,6 +879,14 @@
   color: #fff;
 }
 
+.confirm-card[data-tone="success"] .confirm-header {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.confirm-card[data-tone="info"] .confirm-header {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
 .confirm-body {
   text-align: center;
   padding: 28px 24px;
