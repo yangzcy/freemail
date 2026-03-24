@@ -61,17 +61,22 @@ export function generateSkeleton(view = 'grid', count = 8) {
  * @param {object} m - 邮箱数据
  * @returns {string}
  */
-export function renderCard(m) {
+export function renderCard(m, options = {}) {
+  const selectedAddresses = options.selectedAddresses || new Set();
   const addr = escapeHtml(m.address);
   const time = formatTime(m.created_at);
   const forward = m.forward_to ? escapeHtml(m.forward_to) : '';
+  const isSelected = selectedAddresses.has(m.address);
   
   return `
-    <div class="mailbox-card" data-address="${addr}" data-id="${m.id}" data-action="jump">
+    <div class="mailbox-card ${isSelected ? 'selected' : ''}" data-address="${addr}" data-id="${m.id}" data-action="jump">
+      <label class="select-badge" title="选择邮箱">
+        <input class="mailbox-select" type="checkbox" data-action="select" ${isSelected ? 'checked' : ''} />
+      </label>
       ${m.is_pinned ? '<div class="pin-badge" title="置顶">📌</div>' : ''}
       ${m.is_favorite ? '<div class="favorite-badge" title="收藏">⭐</div>' : ''}
       ${forward ? `<div class="forward-badge" title="转发到: ${forward}">📤</div>` : ''}
-      <div class="line addr" title="${addr}">${addr}</div>
+      <div class="line addr with-select" title="${addr}">${addr}</div>
       <div class="line pwd">${m.password_is_default ? '🔓 默认密码' : '🔐 已设密码'}</div>
       <div class="line login">${m.can_login ? '✅ 可登录' : '🚫 禁止登录'}</div>
       <div class="line time">${time}</div>
@@ -89,13 +94,18 @@ export function renderCard(m) {
  * @param {object} m - 邮箱数据
  * @returns {string}
  */
-export function renderListItem(m) {
+export function renderListItem(m, options = {}) {
+  const selectedAddresses = options.selectedAddresses || new Set();
   const addr = escapeHtml(m.address);
   const time = formatTime(m.created_at);
   const forward = m.forward_to ? escapeHtml(m.forward_to) : '';
+  const isSelected = selectedAddresses.has(m.address);
   
   return `
-    <div class="mailbox-list-item" data-address="${addr}" data-id="${m.id}">
+    <div class="mailbox-list-item ${isSelected ? 'selected' : ''}" data-address="${addr}" data-id="${m.id}">
+      <label class="list-select">
+        <input class="mailbox-select" type="checkbox" data-action="select" ${isSelected ? 'checked' : ''} />
+      </label>
       <div class="pin-indicator">
         ${m.is_pinned ? '<span class="pin-icon">📌</span>' : '<span class="pin-placeholder"></span>'}
       </div>
@@ -128,9 +138,9 @@ export function renderListItem(m) {
  * @param {Array} list - 邮箱列表
  * @returns {string}
  */
-export function renderGrid(list) {
+export function renderGrid(list, options = {}) {
   if (!list || !list.length) return '';
-  return list.map(m => renderCard(m)).join('');
+  return list.map(m => renderCard(m, options)).join('');
 }
 
 /**
@@ -138,9 +148,9 @@ export function renderGrid(list) {
  * @param {Array} list - 邮箱列表
  * @returns {string}
  */
-export function renderList(list) {
+export function renderList(list, options = {}) {
   if (!list || !list.length) return '';
-  return list.map(m => renderListItem(m)).join('');
+  return list.map(m => renderListItem(m, options)).join('');
 }
 
 export default {

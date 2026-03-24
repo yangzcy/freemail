@@ -49,6 +49,58 @@
   -webkit-backdrop-filter: blur(20px);
 }
 
+.mailbox-card.selected,
+.mailbox-list-item.selected {
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15), 0 8px 24px rgba(239, 68, 68, 0.08);
+}
+
+.selection-count {
+  display: inline-flex;
+  align-items: center;
+  min-width: 88px;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 0 2px;
+}
+
+.select-badge,
+.list-select {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.list-select {
+  position: static;
+  flex: 0 0 auto;
+  margin-right: 12px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mailbox-select {
+  width: 16px;
+  height: 16px;
+  accent-color: #dc2626;
+  cursor: pointer;
+}
+
+.mailbox-card .addr.with-select {
+  padding-left: 32px;
+  max-width: 224px;
+}
+
 .mailbox-card::before {
   content: '';
   position: absolute;
@@ -951,7 +1003,7 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
 }
 
@@ -1008,7 +1060,21 @@
   flex-wrap: wrap;
 }
 
+.mailbox-selection-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .batch-actions .btn {
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.mailbox-selection-actions .btn {
   white-space: nowrap;
   transition: all 0.2s ease;
   padding: 6px 10px;
@@ -1019,9 +1085,22 @@
   margin-right: 4px;
 }
 
+.mailbox-selection-actions .btn .btn-icon {
+  margin-right: 4px;
+}
+
 .batch-actions .btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.mailbox-selection-actions .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.mailbox-selection-actions .btn-danger {
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.18);
 }
 
 /* 列表视图样式 */
@@ -1826,4 +1905,3 @@
     gap: 16px;
   }
 }
-

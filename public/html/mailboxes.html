@@ -61,8 +61,16 @@
           </div>
           <!-- 第二行：批量操作 + 视图切换 -->
           <div class="toolbar-row-2">
-            <div class="toolbar-spacer"></div>
             <div class="batch-actions">
+              <button id="select-page" class="btn btn-ghost btn-sm" title="选择当前页邮箱">
+                <span class="btn-icon">☑️</span><span>全选当前页</span>
+              </button>
+              <button id="clear-selection" class="btn btn-ghost btn-sm" title="清空已选邮箱">
+                <span class="btn-icon">🧹</span><span>清空选择</span>
+              </button>
+            </div>
+            <div class="mailbox-selection-actions">
+              <span id="selected-mailbox-count" class="selection-count">已选 0 项</span>
               <button id="batch-allow" class="btn btn-ghost btn-sm" title="批量放行邮箱登录">
                 <span class="btn-icon">✅</span><span>批量放行</span>
               </button>
@@ -81,10 +89,11 @@
               <button id="batch-clear-forward" class="btn btn-ghost btn-sm" title="批量清除转发">
                 <span class="btn-icon">🚫</span><span>清除转发</span>
               </button>
-              <button id="batch-delete" class="btn btn-ghost btn-sm" title="批量删除邮箱">
-                <span class="btn-icon">🗑️</span><span>批量删除</span>
+              <button id="batch-delete" class="btn btn-danger btn-sm" title="删除已选邮箱">
+                <span class="btn-icon">🗑️</span><span>删除所选</span>
               </button>
             </div>
+            <div class="toolbar-spacer"></div>
             <div class="view-toggle">
               <button id="view-grid" class="btn btn-ghost btn-sm active" title="卡片网格视图">
                 <span class="view-icon grid-icon"></span>
@@ -359,4 +368,3 @@
   <script type="module" src="/js/mailboxes.js"></script>
 </body>
 </html>
-

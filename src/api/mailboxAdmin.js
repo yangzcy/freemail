@@ -27,6 +27,41 @@ import {
 export async function handleMailboxAdminApi(request, db, url, path, options) {
   const isMock = !!options.mockOnly;
 
+  async function hardDeleteMailbox(mailboxId, address) {
+    const r2 = options?.r2;
+    const objectRows = await db.prepare(
+      'SELECT r2_object_key FROM messages WHERE mailbox_id = ? AND r2_object_key IS NOT NULL AND r2_object_key != ?'
+    ).bind(mailboxId, '').all();
+    console.log('hardDeleteMailbox:start', {
+      mailboxId,
+      address,
+      hasR2: !!r2,
+      objectCount: objectRows?.results?.length || 0
+    });
+
+    try { await db.exec('BEGIN'); } catch (_) { }
+    await db.prepare('DELETE FROM user_mailboxes WHERE mailbox_id = ?').bind(mailboxId).run();
+    await db.prepare('DELETE FROM messages WHERE mailbox_id = ?').bind(mailboxId).run();
+    const deleteResult = await db.prepare('DELETE FROM mailboxes WHERE id = ?').bind(mailboxId).run();
+    try { await db.exec('COMMIT'); } catch (_) { }
+
+    if (Number(deleteResult?.meta?.changes || 0) > 0 && r2 && objectRows?.results?.length) {
+      for (const row of objectRows.results) {
+        const objectKey = String(row?.r2_object_key || '').trim();
+        if (!objectKey) continue;
+        try {
+          console.log('hardDeleteMailbox:r2Delete', { objectKey });
+          await r2.delete(objectKey);
+        } catch (e) {
+          console.warn(`删除 R2 对象失败: ${objectKey}`, e);
+        }
+      }
+    }
+
+    if (address) invalidateMailboxCache(address);
+    return deleteResult;
+  }
+
   async function ensureMailboxDeletePermission(mailboxId) {
     if (isStrictAdmin(request, options)) return null;
     const payload = getJwtPayload(request, options);
@@ -50,15 +85,11 @@ export async function handleMailboxAdminApi(request, db, url, path, options) {
       const permissionError = await ensureMailboxDeletePermission(mailboxId);
       if (permissionError) return permissionError;
 
-      try { await db.exec('BEGIN'); } catch (_) { }
-      await db.prepare('DELETE FROM messages WHERE mailbox_id = ?').bind(mailboxId).run();
-      const deleteResult = await db.prepare('DELETE FROM mailboxes WHERE id = ?').bind(mailboxId).run();
-      try { await db.exec('COMMIT'); } catch (_) { }
+      const deleteResult = await hardDeleteMailbox(mailboxId, normalized);
 
       const deleted = (deleteResult?.meta?.changes || 0) > 0;
 
       if (deleted) {
-        invalidateMailboxCache(normalized);
         invalidateSystemStatCache('total_mailboxes');
       }
 
@@ -105,14 +136,10 @@ export async function handleMailboxAdminApi(request, db, url, path, options) {
             continue;
           }
 
-          try { await db.exec('BEGIN'); } catch (_) { }
-          await db.prepare('DELETE FROM messages WHERE mailbox_id = ?').bind(mailboxId).run();
-          const deleteResult = await db.prepare('DELETE FROM mailboxes WHERE id = ?').bind(mailboxId).run();
-          try { await db.exec('COMMIT'); } catch (_) { }
+          const deleteResult = await hardDeleteMailbox(mailboxId, address);
 
           const changed = Number(deleteResult?.meta?.changes || 0);
           if (changed > 0) {
-            invalidateMailboxCache(address);
             deleted.push(address);
           } else {
             failed.push({ address, error: '删除失败' });

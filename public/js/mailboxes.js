@@ -30,6 +30,9 @@ const els = {
   loginFilter: document.getElementById('login-filter'),
   favoriteFilter: document.getElementById('favorite-filter'),
   forwardFilter: document.getElementById('forward-filter'),
+  selectPage: document.getElementById('select-page'),
+  clearSelection: document.getElementById('clear-selection'),
+  selectedCount: document.getElementById('selected-mailbox-count'),
   // 批量操作按钮
   batchAllow: document.getElementById('batch-allow'),
   batchDeny: document.getElementById('batch-deny'),
@@ -68,6 +71,47 @@ let page = 1, PAGE_SIZE = 20, lastCount = 0, currentData = [];
 let currentView = localStorage.getItem('mf:mailboxes:view') || 'grid';
 let searchTimeout = null, isLoading = false;
 let availableDomains = [];
+const selectedAddresses = new Set();
+
+function renderCurrentData() {
+  if (!els.grid) return;
+  els.grid.innerHTML = currentView === 'grid'
+    ? renderGrid(currentData, { selectedAddresses })
+    : renderList(currentData, { selectedAddresses });
+}
+
+function updateSelectionUI() {
+  const count = selectedAddresses.size;
+  if (els.selectedCount) {
+    els.selectedCount.textContent = `已选 ${count} 项`;
+  }
+  if (els.batchDelete) {
+    els.batchDelete.disabled = count === 0;
+  }
+  if (els.clearSelection) {
+    els.clearSelection.disabled = count === 0;
+  }
+}
+
+function blurActionButton(target) {
+  if (target && typeof target.blur === 'function') {
+    target.blur();
+  }
+}
+
+function toggleSelectedAddress(address, forceSelected = null) {
+  if (!address) return;
+  if (forceSelected === true) {
+    selectedAddresses.add(address);
+  } else if (forceSelected === false) {
+    selectedAddresses.delete(address);
+  } else if (selectedAddresses.has(address)) {
+    selectedAddresses.delete(address);
+  } else {
+    selectedAddresses.add(address);
+  }
+  updateSelectionUI();
+}
 
 // 加载邮箱列表
 async function load() {
@@ -96,11 +140,12 @@ async function load() {
       els.grid.innerHTML = '';
       if (els.empty) els.empty.style.display = 'block';
     } else {
-      els.grid.innerHTML = currentView === 'grid' ? renderGrid(list) : renderList(list);
+      renderCurrentData();
       if (els.empty) els.empty.style.display = 'none';
     }
     
     updatePager();
+    updateSelectionUI();
     bindCardEvents();
   } catch (e) {
     console.error('加载失败:', e);
@@ -124,12 +169,33 @@ function bindCardEvents() {
   els.grid?.querySelectorAll('.mailbox-card[data-action="jump"]').forEach(card => {
     card.onclick = (e) => {
       // 如果点击的是按钮区域，不跳转
-      if (e.target.closest('.actions')) return;
+      if (e.target.closest('.actions') || e.target.closest('.select-badge')) return;
       const address = card.dataset.address;
       if (address) {
         showToast('跳转中...', 'info', 500);
         setTimeout(() => location.href = `/?mailbox=${encodeURIComponent(address)}`, 600);
       }
+    };
+  });
+
+  els.grid?.querySelectorAll('.mailbox-list-item').forEach(item => {
+    item.onclick = (e) => {
+      if (e.target.closest('.list-actions') || e.target.closest('.list-select')) return;
+      const address = item.dataset.address;
+      if (address) {
+        showToast('跳转中...', 'info', 500);
+        setTimeout(() => location.href = `/?mailbox=${encodeURIComponent(address)}`, 600);
+      }
+    };
+  });
+
+  els.grid?.querySelectorAll('.mailbox-select').forEach(input => {
+    input.onchange = (e) => {
+      e.stopPropagation();
+      const card = input.closest('[data-address]');
+      const address = card?.dataset.address;
+      toggleSelectedAddress(address, input.checked);
+      card?.classList.toggle('selected', input.checked);
     };
   });
   
@@ -148,6 +214,8 @@ function bindCardEvents() {
       if (!address) return;
       
       switch (action) {
+        case 'select':
+          break;
         case 'copy':
           try { await navigator.clipboard.writeText(address); showToast('已复制', 'success'); }
           catch(_) { showToast('复制失败', 'error'); }
@@ -218,7 +286,7 @@ function switchView(view) {
   els.viewList?.classList.toggle('active', view === 'list');
   els.grid.className = view;
   if (currentData.length) {
-    els.grid.innerHTML = view === 'grid' ? renderGrid(currentData) : renderList(currentData);
+    renderCurrentData();
     bindCardEvents();
   }
 }
@@ -437,6 +505,54 @@ async function executeBatchAction() {
   }
 }
 
+async function deleteSelectedMailboxes(event) {
+  const addresses = Array.from(selectedAddresses);
+  if (!addresses.length) {
+    showToast('请先勾选邮箱', 'error');
+    blurActionButton(event?.currentTarget);
+    return;
+  }
+  if (!confirm(`确定删除已选中的 ${addresses.length} 个邮箱？所有邮件将被清空。`)) {
+    blurActionButton(event?.currentTarget);
+    return;
+  }
+
+  try {
+    const result = await batchDeleteMailboxes(addresses);
+    if (!result.ok) {
+      const err = await result.json().catch(() => ({}));
+      throw new Error(err.error || '删除失败');
+    }
+    const payload = await result.json().catch(() => ({}));
+    for (const address of payload.deleted || addresses) {
+      selectedAddresses.delete(address);
+    }
+    updateSelectionUI();
+    showToast(`已删除 ${payload.deleted_count ?? addresses.length} 个邮箱`, 'success');
+    await load();
+  } catch (e) {
+    showToast('删除失败: ' + (e.message || '未知错误'), 'error');
+  } finally {
+    blurActionButton(event?.currentTarget);
+  }
+}
+
+function selectCurrentPageMailboxes(event) {
+  currentData.forEach(item => selectedAddresses.add(item.address));
+  renderCurrentData();
+  bindCardEvents();
+  updateSelectionUI();
+  blurActionButton(event?.currentTarget);
+}
+
+function clearSelectedMailboxes(event) {
+  selectedAddresses.clear();
+  renderCurrentData();
+  bindCardEvents();
+  updateSelectionUI();
+  blurActionButton(event?.currentTarget);
+}
+
 // 事件绑定
 els.search?.addEventListener('click', () => { page = 1; load(); });
 els.q?.addEventListener('input', () => { if (searchTimeout) clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { page = 1; load(); }, 300); });
@@ -453,6 +569,8 @@ els.forwardFilter?.addEventListener('change', () => { page = 1; load(); });
 els.viewGrid?.addEventListener('click', () => switchView('grid'));
 els.viewList?.addEventListener('click', () => switchView('list'));
 els.logout?.addEventListener('click', async () => { try { await fetch('/api/logout', { method: 'POST' }); } catch(_) {} location.replace('/html/login.html'); });
+els.selectPage?.addEventListener('click', selectCurrentPageMailboxes);
+els.clearSelection?.addEventListener('click', clearSelectedMailboxes);
 
 // 批量操作按钮
 els.batchAllow?.addEventListener('click', () => openBatchModal('allow', '批量放行登录', '✅', '输入要允许登录的邮箱地址（每行一个或用逗号分隔）：'));
@@ -461,7 +579,7 @@ els.batchFavorite?.addEventListener('click', () => openBatchModal('favorite', '�
 els.batchUnfavorite?.addEventListener('click', () => openBatchModal('unfavorite', '批量取消收藏', '☆', '输入要取消收藏的邮箱地址（每行一个或用逗号分隔）：'));
 els.batchForward?.addEventListener('click', () => openBatchModal('forward', '批量设置转发', '↪️', '输入要设置转发的邮箱地址（每行一个或用逗号分隔）：'));
 els.batchClearForward?.addEventListener('click', () => openBatchModal('clear-forward', '批量清除转发', '🚫', '输入要清除转发的邮箱地址（每行一个或用逗号分隔）：'));
-els.batchDelete?.addEventListener('click', () => openBatchModal('delete', '批量删除邮箱', '🗑️', '输入要删除的邮箱地址（每行一个或用逗号分隔）。删除后该邮箱及其邮件将被清空：'));
+els.batchDelete?.addEventListener('click', deleteSelectedMailboxes);
 
 // 批量操作模态框事件
 els.batchModalClose?.addEventListener('click', closeBatchModal);
@@ -524,5 +642,6 @@ async function initGuestMode() {
   if (els.grid) els.grid.className = currentView;
   
   await loadDomainsFilter();
+  updateSelectionUI();
   await load();
 })();

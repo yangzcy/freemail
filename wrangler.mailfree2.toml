@@ -1,0 +1,26 @@
+name = "mailfree2"
+main = "src/server.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "TEMP_MAIL_DB"
+database_name = "maill_free_db"
+database_id = "4d49488e-1ffd-48c6-88ef-136515f0d66b"
+
+[vars]
+ADMIN_PASSWORD = "admin"
+api_base = "https://fm.snacktruckmall.shop"
+MAIL_DOMAIN = "emacl.snacktruckmall.shop,emadl.snacktruckmall.shop,emael.snacktruckmall.shop"
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+[[r2_buckets]]
+binding = "MAIL_EML"
+bucket_name = "mail-eml"
+
+[[routes]]
+pattern = "fm.snacktruckmall.shop"
+zone_name = "snacktruckmall.shop"
+custom_domain = true
