@@ -71,10 +71,42 @@ export async function deleteMailbox(address) {
  * @returns {Promise<Response>}
  */
 export async function batchDeleteMailboxes(addresses) {
-  return api('/api/mailboxes/batch-delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ addresses })
+  const normalized = Array.from(new Set(
+    (Array.isArray(addresses) ? addresses : [])
+      .map(address => String(address || '').trim().toLowerCase())
+      .filter(Boolean)
+  ));
+
+  const chunkSize = 100;
+  const deleted = [];
+  const failed = [];
+
+  for (let i = 0; i < normalized.length; i += chunkSize) {
+    const chunk = normalized.slice(i, i + chunkSize);
+    const response = await api('/api/mailboxes/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses: chunk })
+    });
+
+    if (!response.ok) {
+      return response;
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    deleted.push(...(payload.deleted || []));
+    failed.push(...(payload.failed || []));
+  }
+
+  return new Response(JSON.stringify({
+    success: failed.length === 0,
+    deleted_count: deleted.length,
+    failed_count: failed.length,
+    deleted,
+    failed
+  }), {
+    status: failed.length ? 207 : 200,
+    headers: { 'Content-Type': 'application/json' }
   });
 }
 

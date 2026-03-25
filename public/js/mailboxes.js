@@ -32,6 +32,7 @@ const els = {
   forwardFilter: document.getElementById('forward-filter'),
   selectPage: document.getElementById('select-page'),
   selectFiltered: document.getElementById('select-filtered'),
+  deleteFiltered: document.getElementById('delete-filtered'),
   clearSelection: document.getElementById('clear-selection'),
   selectedCount: document.getElementById('selected-mailbox-count'),
   // 批量操作按钮
@@ -191,6 +192,9 @@ function updateSelectionUI() {
   }
   if (els.selectFiltered) {
     els.selectFiltered.disabled = lastCount === 0;
+  }
+  if (els.deleteFiltered) {
+    els.deleteFiltered.disabled = lastCount === 0;
   }
 }
 
@@ -605,8 +609,7 @@ async function executeBatchAction() {
         break;
     }
     if (!result?.ok) {
-      const err = await result?.json().catch(() => ({}));
-      throw new Error(err.error || '批量操作失败');
+      throw new Error(await readErrorMessage(result, '批量操作失败'));
     }
     const payload = await result.json().catch(() => ({}));
     const deletedCount = payload.deleted_count ?? emails.length;
@@ -667,8 +670,7 @@ async function deleteSelectedMailboxes(event) {
   try {
     const result = await batchDeleteMailboxes(addresses);
     if (!result.ok) {
-      const err = await result.json().catch(() => ({}));
-      throw new Error(err.error || '删除失败');
+      throw new Error(await readErrorMessage(result, '删除失败'));
     }
     const payload = await result.json().catch(() => ({}));
     for (const address of payload.deleted || addresses) {
@@ -683,6 +685,57 @@ async function deleteSelectedMailboxes(event) {
         ? `已完成硬删除 ${deletedCount} 个邮箱。\n本次仅处理当前筛选结果中的已选项，另有 ${skippedCount} 个已选邮箱不在当前筛选范围内，未被删除。`
         : `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
       { title: '删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
+    );
+  } catch (e) {
+    showToast('删除失败: ' + (e.message || '未知错误'), 'error');
+  } finally {
+    blurActionButton(event?.currentTarget);
+  }
+}
+
+async function deleteFilteredMailboxes(event) {
+  let addresses = [];
+  try {
+    addresses = await loadAllFilteredAddresses();
+  } catch (e) {
+    showToast('读取当前筛选结果失败', 'error');
+    blurActionButton(event?.currentTarget);
+    return;
+  }
+
+  if (!addresses.length) {
+    showToast('当前筛选结果为空', 'error');
+    blurActionButton(event?.currentTarget);
+    return;
+  }
+
+  const label = getCurrentFilterParams();
+  const hasFilter = Object.keys(label).length > 0;
+  const prompt = hasFilter
+    ? `当前筛选结果共 ${addresses.length} 项，将全部硬删除。相关邮件与关联数据也会一起清理，是否继续？`
+    : `将删除系统中的全部 ${addresses.length} 个邮箱。相关邮件与关联数据也会一起清理，是否继续？`;
+
+  if (!await showConfirmDialog(prompt, {
+    title: hasFilter ? '删除筛选结果' : '删除全部邮箱',
+    icon: '🗑️',
+    confirmText: hasFilter ? `删除 ${addresses.length} 项` : `删除全部 ${addresses.length} 项`
+  })) {
+    blurActionButton(event?.currentTarget);
+    return;
+  }
+
+  try {
+    const result = await batchDeleteMailboxes(addresses);
+    if (!result.ok) {
+      throw new Error(await readErrorMessage(result, '删除失败'));
+    }
+    const payload = await result.json().catch(() => ({}));
+    selectedAddresses.clear();
+    updateSelectionUI();
+    await load();
+    await showAlertDialog(
+      `已完成硬删除 ${payload.deleted_count ?? addresses.length} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
+      { title: hasFilter ? '筛选结果删除完成' : '全部删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
     );
   } catch (e) {
     showToast('删除失败: ' + (e.message || '未知错误'), 'error');
@@ -745,6 +798,7 @@ els.viewList?.addEventListener('click', () => switchView('list'));
 els.logout?.addEventListener('click', async () => { try { await fetch('/api/logout', { method: 'POST' }); } catch(_) {} location.replace('/html/login.html'); });
 els.selectPage?.addEventListener('click', selectCurrentPageMailboxes);
 els.selectFiltered?.addEventListener('click', selectFilteredMailboxes);
+els.deleteFiltered?.addEventListener('click', deleteFilteredMailboxes);
 els.clearSelection?.addEventListener('click', clearSelectedMailboxes);
 
 // 批量操作按钮

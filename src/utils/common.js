@@ -42,6 +42,39 @@ export function isValidEmail(email) {
 }
 
 /**
+ * 解析邮件域名配置，兼容字符串、数组和 JSON 字符串
+ * @param {string|string[]|any} value - 原始域名配置
+ * @returns {string[]} 归一化后的域名列表
+ */
+export function parseMailDomains(value) {
+  if (Array.isArray(value)) {
+    return value.map(item => String(item || '').trim()).filter(Boolean);
+  }
+
+  const raw = String(value ?? '').trim();
+  if (!raw) return ['temp.example.com'];
+
+  if (raw.startsWith('[') && raw.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const list = parsed.map(item => String(item || '').trim()).filter(Boolean);
+        if (list.length) return list;
+      }
+    } catch (_) {
+      // Fall back to comma/space split below.
+    }
+  }
+
+  const list = raw
+    .split(/[,\s]+/)
+    .map(item => item.trim())
+    .filter(Boolean);
+
+  return list.length ? list : ['temp.example.com'];
+}
+
+/**
  * 计算文本的SHA-256哈希值并返回十六进制字符串
  * @param {string} text - 需要计算哈希的文本内容
  * @returns {Promise<string>} 十六进制格式的SHA-256哈希值
