@@ -218,6 +218,21 @@ async function readErrorMessage(response, fallback = '操作失败') {
   }
 }
 
+function summarizeDeleteResult(payload, requestedCount) {
+  const deletedCount = Number(payload?.deleted_count ?? 0);
+  const failed = Array.isArray(payload?.failed) ? payload.failed : [];
+  const failedCount = Number(payload?.failed_count ?? failed.length ?? 0);
+  const totalCount = Number(requestedCount ?? (deletedCount + failedCount) ?? 0);
+  const failedPreview = failed
+    .slice(0, 5)
+    .map(item => {
+      const address = String(item?.address || '').trim() || '未知地址';
+      const reason = String(item?.error || '未知原因').trim();
+      return `${address}: ${reason}`;
+    });
+  return { deletedCount, failedCount, totalCount, failedPreview };
+}
+
 function toggleSelectedAddress(address, forceSelected = null) {
   if (!address) return;
   if (forceSelected === true) {
@@ -615,8 +630,12 @@ async function executeBatchAction() {
     const deletedCount = payload.deleted_count ?? emails.length;
     closeBatchModal();
     if (currentBatchAction === 'delete') {
+      const { failedCount, failedPreview, totalCount } = summarizeDeleteResult(payload, emails.length);
       await showAlertDialog(
-        `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
+        failedCount > 0
+          ? `请求删除 ${totalCount} 个邮箱，实际删除 ${deletedCount} 个，失败 ${failedCount} 个。`
+            + (failedPreview.length ? `\n失败示例：\n${failedPreview.join('\n')}` : '')
+          : `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
         { title: '批量删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
       );
     } else {
@@ -677,11 +696,15 @@ async function deleteSelectedMailboxes(event) {
       selectedAddresses.delete(address);
     }
     updateSelectionUI();
-    const deletedCount = payload.deleted_count ?? addresses.length;
+    const { deletedCount, failedCount, failedPreview } = summarizeDeleteResult(payload, addresses.length);
     const skippedCount = Math.max(allSelected.length - addresses.length, 0);
     await load();
     await showAlertDialog(
-      skippedCount > 0
+      failedCount > 0
+        ? `请求删除 ${addresses.length} 个已选邮箱，实际删除 ${deletedCount} 个，失败 ${failedCount} 个。`
+          + (skippedCount > 0 ? `\n另有 ${skippedCount} 个已选邮箱不在当前筛选范围内，未参与本次删除。` : '')
+          + (failedPreview.length ? `\n失败示例：\n${failedPreview.join('\n')}` : '')
+        : skippedCount > 0
         ? `已完成硬删除 ${deletedCount} 个邮箱。\n本次仅处理当前筛选结果中的已选项，另有 ${skippedCount} 个已选邮箱不在当前筛选范围内，未被删除。`
         : `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
       { title: '删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
@@ -730,11 +753,15 @@ async function deleteFilteredMailboxes(event) {
       throw new Error(await readErrorMessage(result, '删除失败'));
     }
     const payload = await result.json().catch(() => ({}));
+    const { deletedCount, failedCount, failedPreview } = summarizeDeleteResult(payload, addresses.length);
     selectedAddresses.clear();
     updateSelectionUI();
     await load();
     await showAlertDialog(
-      `已完成硬删除 ${payload.deleted_count ?? addresses.length} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
+      failedCount > 0
+        ? `请求删除 ${addresses.length} 个邮箱，实际删除 ${deletedCount} 个，失败 ${failedCount} 个。`
+          + (failedPreview.length ? `\n失败示例：\n${failedPreview.join('\n')}` : '')
+        : `已完成硬删除 ${deletedCount} 个邮箱。\n相关邮件与关联数据也已一并清理。`,
       { title: hasFilter ? '筛选结果删除完成' : '全部删除完成', icon: '✅', confirmText: '继续管理', tone: 'success' }
     );
   } catch (e) {
