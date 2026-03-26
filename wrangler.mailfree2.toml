@@ -8,9 +8,26 @@ database_name = "maill_free_db"
 database_id = "4d49488e-1ffd-48c6-88ef-136515f0d66b"
 
 [vars]
+# 生产环境建议使用 `wrangler secret put ADMIN_PASSWORD -c wrangler.mailfree2.toml`
+# 把管理员密码写入 Cloudflare Secret，避免把管理密码长期留在配置文件里。
 ADMIN_PASSWORD = "admin"
 api_base = "https://fm.snacktruckmall.shop"
 MAIL_DOMAIN = "emafl.snacktruckmall.shop,emagl.snacktruckmall.shop,emahl.snacktruckmall.shop"
+# SESSION_EXPIRE_DAYS = "7"
+#
+# retention 自动清理配置
+# 是否启用自动 retention cleanup。现网已计划开启，因此这里显式设为 true。
+ENABLE_RETENTION_CLEANUP = "true"
+# 临时邮箱保留时长，单位小时。超过该时间的邮箱可被清理。
+MAILBOX_RETENTION_HOURS = "72"
+# 入站邮件保留时长，单位小时。超过该时间的邮件可被清理。
+MESSAGE_RETENTION_HOURS = "72"
+# 发件记录保留时长，单位天。超过该时间的 sent_email 记录可被清理。
+SENT_EMAIL_RETENTION_DAYS = "15"
+# 自动清理最小触发间隔，单位秒，避免请求过于频繁时重复触发清理。
+RETENTION_CLEANUP_INTERVAL_SECONDS = "900"
+# 单批删除上限，避免一次性删除过多记录或对象。
+DELETE_BATCH_SIZE = "100"
 
 [assets]
 directory = "public"
